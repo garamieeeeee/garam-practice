@@ -15,30 +15,35 @@
 char Infix[MAX_LEN] = { '\0' };
 char Postfix[MAX_LEN] = { '\0' };
 
+typedef enum { lparen, plus, minus, times, divide, mod } Oper;
+
+typedef Oper ElementType;
+
 typedef struct {
-	void* data;
-	int elementSize;
+	ElementType data;
 }Node;
 
 typedef struct {
-	int capacity;
 	int top;
+	int capacity;
 	Node* nodes;
 }StackType;
 
 //함수 선언
 /*--------------------------------------------------------*/
-void CreateStack(StackType** s, int elementSize);
+void CreateStack(StackType** s);
 void DestroyStack(StackType** s);
-void Push(StackType* s, void* data);
-void* Pop(StackType* s);
-void* Peek(StackType* s);
-int IsFull(StackType* s);
 int IsEmpty(StackType* s);
+int IsFull(StackType* s);
+void Push(StackType* s, ElementType data);
+ElementType Pop(StackType* s);
+ElementType Peek(StackType* s);
 void ReadFile(char* FileName);
 void PrintExp(char* Exp);
 void InfixToPostfix();
-int GetPrec(char* op);
+Oper SymbolToOper(char op);
+char OperToSymbol(Oper op);
+int GetPrec(Oper op);
 int CalPostfix();
 void append(char* str, char ch);
 /*--------------------------------------------------------*/
@@ -47,12 +52,12 @@ int main(int argc, char* argv[]) {
 
 	////0. 인자 검사
 	if (argc < 2) { //argv[0]: 프로그램 실행 경로, argv[1]: input.txt
-		fprintf(stderr, "[Usage] %s <input1> <input2> <input3>\n", argv[0]);
+		fprintf(stderr, "[Usage] %s <input> \n", argv[0]);
 		return 1;
 	}
 
-	////1. input.txt:  ( 4 * ( 2 * 1 - 2 ) ) + ( 3 % 2 ) - ( 4 / ( 8 - 6 ) ) 
-	
+	////1. input.txt: ( 4 * ( 2 * 1 - 2 ) ) + ( 3 % 2 ) - ( 4 / ( 8 - 6 ) )  
+
 	//Infix 수식 읽고 저장
 	ReadFile(argv[1]);
 
@@ -77,70 +82,64 @@ int main(int argc, char* argv[]) {
 
 //스택 관련 함수
 /*--------------------------------------------------------*/
-void CreateStack(StackType** s, int elementSize) {
+void CreateStack(StackType** s) {
+
+	//create Stack
 	(*s) = (StackType*)malloc(sizeof(StackType));
 	if ((*s) == NULL) {
 		fprintf(stderr, "Memory allocation failed\n");
 		exit(1);
 	}
 
-	(*s)->capacity = 10;//스택의 초기 용량은 10으로 설정
+	//initialize
+	(*s)->capacity = 10;
 	(*s)->top = -1;
 
+	//allocate memory for Nodes
 	(*s)->nodes = (Node*)malloc((*s)->capacity * sizeof(Node));
 	if ((*s)->nodes == NULL) {
 		fprintf(stderr, "Memory allocation failed\n");
 		exit(1);
 	}
 
-	//자료형 크기 저장
-	for (int i = 0; i < (*s)->capacity; i++) {
-		(*s)->nodes[i].data = malloc(elementSize); //자료형 크기만큼 메모리 할당
-		(*s)->nodes[i].elementSize = elementSize;
-	}
-
 	return;
 }
 
 void DestroyStack(StackType** s) {
-	for (int i = 0; i < (*s)->capacity; i++) {
-		free((*s)->nodes[i].data);
-	}
-	free((*s)->nodes);
 
+	//free allocated nodes
+	free((*s)->nodes);
+	(*s)->nodes = NULL; //메모리를 해제한 후 포인터를 NULL로 설정하는 습관을 들이면, 이후 이중 해제(Bug)를 방지할 수 있다.
+
+	//free allocated stack
 	free(*s);
 	(*s) = NULL;
 
 	return;
 }
 
-void Push(StackType* s, void* data) {
-	if (IsFull(s)) {
-		s->capacity *= 2; //용량을 두배로 늘리고 메모리 재할당
-		s->nodes = realloc(s->nodes, s->capacity * sizeof(Node));
+int IsEmpty(StackType* s) {
+	return (s->top == -1);
+}
 
+int IsFull(StackType* s) {
+	return (s->top == s->capacity - 1);
+}
+
+void Push(StackType* s, ElementType data) {
+	if (IsFull(s)) {
+		s->capacity *= 2;
+		s->nodes = (Node*)realloc(s->nodes, s->capacity * sizeof(Node));
 		if (s->nodes == NULL) {
 			fprintf(stderr, "Memory reallocation failed\n");
 			exit(1);
 		}
-
-		for (int i = s->top + 1; i < s->capacity; i++) {
-			s->nodes[i].data = malloc(s->nodes[0].elementSize);
-			if (s->nodes[i].data == NULL) {
-				fprintf(stderr, "Memory allocation failed for new node\n");
-				exit(1);
-			}
-
-			s->nodes[i].elementSize = s->nodes[0].elementSize;
-		}
 	}
 
-	memcpy(s->nodes[++(s->top)].data, data, s->nodes[s->top].elementSize);//전달된 데이터를 메모리 복사로 저장한다.
-
-	return;
+	s->nodes[++(s->top)].data = data;
 }
 
-void* Pop(StackType* s) {
+ElementType Pop(StackType* s) {
 	if (IsEmpty(s)) {
 		fprintf(stderr, "Stack is empty\n");
 		exit(1);
@@ -149,7 +148,7 @@ void* Pop(StackType* s) {
 	return s->nodes[(s->top)--].data;
 }
 
-void* Peek(StackType* s) {
+ElementType Peek(StackType* s) {
 	if (IsEmpty(s)) {
 		fprintf(stderr, "Stack is empty\n");
 		exit(1);
@@ -158,13 +157,6 @@ void* Peek(StackType* s) {
 	return s->nodes[s->top].data;
 }
 
-int IsFull(StackType* s) {
-	return (s->top == s->capacity - 1);
-}
-
-int IsEmpty(StackType* s) {
-	return (s->top == -1);
-}
 /*--------------------------------------------------------*/
 
 //프로그램 관련 함수
@@ -192,8 +184,6 @@ void ReadFile(char* FileName) {
 		exit(EXIT_FAILURE);
 	}
 
-	fclose(file);
-
 	return;
 }
 
@@ -219,13 +209,16 @@ void InfixToPostfix() {
 	}
 
 	////수식 변환 시작
-	// 연산자를 담을 스택 생성
-	StackType* s_c = NULL;
-	CreateStack(&s_c, sizeof(char[3])); //두글자 연산자를 위해 크기 변경
+	//Infix 수식을 복사해서 사용
+	char InfixCopy[MAX_LEN];
+	strcpy(InfixCopy, Infix);
 
-	char* token = strtok(Infix, " ");// 공백 기준으로 토큰화
-	char temp[3]; //두글자 연산자까지 저장 가능
-	char top_op[3];
+	// 연산자의 enum 값(Oper 타입)을 담을 스택 생성
+	StackType* s = NULL;
+	CreateStack(&s);
+
+	char* token = strtok(InfixCopy, " ");// 공백 기준으로 토큰화
+	Oper op;
 
 	while (token != NULL) { // 모든 토큰 처리
 		if (isdigit(token[0])) { //숫자(피연산자)인 경우: 바로 Postfix에 출력
@@ -233,70 +226,81 @@ void InfixToPostfix() {
 			append(Postfix, ' '); //숫자 구분을 위한 공백 추가
 		}
 		else if (strcmp(token, "(") == 0) { //왼쪽 괄호인 경우: 무조건 스택에 삽입
-			strcpy(temp, token);
-			Push(s_c, temp);
+			op = SymbolToOper(*token);
+			Push(s, op);
 		}
 		else if (strcmp(token, ")") == 0) { //오른쪽 괄호를 만나면 
 			// 왼쪽 괄호를 만날때까지 스택에서 연산자를 꺼내서(Pop) Postfix에 출력
-			strcpy(top_op, (char*)Pop(s_c));
-			while (strcmp(top_op, "(") != 0) {
-				strcat(Postfix, top_op);
+			op = Pop(s);
+			while (op != lparen) {
+				append(Postfix, OperToSymbol(op));
 				append(Postfix, ' '); //연산자 구분을 위한 공백 추가
-				strcpy(top_op, (char*)Pop(s_c));
+				op = Pop(s);
 			}
 		}
 		else { //연산자인 경우: 우선순위를 고려하여 스택에 삽입
-			while (!IsEmpty(s_c) && (GetPrec(token) <= GetPrec((char*)Peek(s_c)))) {
-				strcat(Postfix, (char*)Pop(s_c));
+			while (!IsEmpty(s) && (GetPrec(SymbolToOper(*token)) <= GetPrec(Peek(s)))) {
+				append(Postfix, OperToSymbol(Pop(s)));
 				append(Postfix, ' '); //연산자 구분을 위한 공백 추가
 			}
 
-			strcpy(temp, token);
-			Push(s_c, temp);
+			Push(s, SymbolToOper(*token));
 		}
 
 		token = strtok(NULL, " "); //다음 토큰
 	}
 
 	//스택에 남아있는 연산자들 모두 Postfix에 출력
-	while (!IsEmpty(s_c)) {
-		strcat(Postfix, (char*)Pop(s_c));
+	while (!IsEmpty(s)) {
+		append(Postfix, OperToSymbol(Pop(s)));
 		append(Postfix, ' '); //연산자 구분을 위한 공백 추가
 	}
 
+	//Postfix의 맨 끝을 '\0'로 설정
+	len = strlen(Postfix);
+	if (len > 0 && Postfix[len - 1] == ' ') {
+		Postfix[len - 1] = '\0';
+	}
+
 	//스택 사용이 끝나면 삭제
-	DestroyStack(&s_c);
+	DestroyStack(&s);
 }
 
-int GetPrec(char* op) {
+Oper SymbolToOper(char op) {
+	switch (op) {
+		case '(': return lparen;
+		case '+': return plus;
+		case '-': return minus;
+		case '*': return times;
+		case '/': return divide;
+		case '%': return mod;
+	}
 
-	if (*op == '(') {
-		return 0;
+	return -1;
+}
+
+char OperToSymbol(Oper op) {
+	switch (op) {
+		case lparen: return '(';
+		case plus: return '+';
+		case minus: return '-';
+		case times: return '*';
+		case divide: return '/';
+		case mod: return '%';
 	}
-	else if (strcmp(op, "||") == 0) {
-		return 1;
-	}
-	else if (strcmp(op, "&&") == 0) {
-		return 2;
-	}
-	else if (strcmp(op, "==") == 0 || strcmp(op, "!=") == 0) {
-		return 3;
-	}
-	else if (*op == '<' || *op == '>' || (strcmp(op, "<=") == 0) || (strcmp(op, ">=") == 0)) {
-		return 4;
-	}
-	else if (*op == '+' || *op == '-') {
-		return 5;
-	}
-	else if (*op == '*' || *op == '/' || *op == '%') {
-		return 6;
+}
+
+int GetPrec(Oper op) {
+	switch (op) {
+		case lparen: return 0;
+		case plus: case minus: return 1;
+		case times: case divide: case mod: return 2;
 	}
 
 	return -1;
 }
 
 int CalPostfix() {
-
 	//먼저 Postfix가 입력되었는지를 확인
 	int len = strlen(Postfix);
 
@@ -306,74 +310,51 @@ int CalPostfix() {
 	}
 
 	////Postfix 계산 시작
-	// 피연산자(int 타입)를 담을 스택 생성
-	StackType* s_i = NULL;
-	CreateStack(&s_i, sizeof(int));
+	//Postfix 수식을 복사해서 사용
+	char PostfixCopy[MAX_LEN];
+	strcpy(PostfixCopy, Postfix);
 
-	char* token = strtok(Postfix, " "); //공백 기준으로 토큰화
+	// 피연산자(int 타입)를 담을 스택 생성
+	StackType* s = NULL;
+	CreateStack(&s);
+
+	char* token = strtok(PostfixCopy, " "); //공백 기준으로 토큰화
 	int op1, op2, value;
-	int temp;
 
 	while (token != NULL) {
-		if (isdigit(token[0])) { //숫자(피연산자)인 경우
-			value = atoi(token); //문자열을 정수로 변환
-			Push(s_i, &value);
+		if (isdigit(token[0])) { //숫자(피연산자)인 경우: 스택에 삽입
+			value = atoi(token); //문자열을 정수로 변환한 뒤 삽입
+			Push(s, value);
 		}
-		else { //연산자인 경우
-			op2 = *(int*)Pop(s_i);
-			op1 = *(int*)Pop(s_i);
+		else { //연산자인 경우: 스택 상단에서 피연산자 두개를 꺼내서 연산자로 연산, 결과를 다시 스택에 삽입
+			op2 = Pop(s);
+			op1 = Pop(s);
 
 			if (*token == '+') {
-				temp = op1 + op2;
+				Push(s, op1 + op2);
 			}
 			else if (*token == '-') {
-				temp = op1 - op2;
+				Push(s, op1 - op2);
 			}
 			else if (*token == '*') {
-				temp = op1 * op2;
+				Push(s, op1 * op2);
 			}
 			else if (*token == '/') {
-				temp = op1 / op2;
+				Push(s, op1 / op2);
 			}
 			else if (*token == '%') {
-				temp = op1 % op2;
+				Push(s, op1 % op2);
 			}
-			else if (strcmp(token, "&&") == 0) {
-				temp = (op1 && op2); //결과는 true(1)이거나 false(0) 둘중에 하나
-			}
-			else if (strcmp(token, "||") == 0) {
-				temp = (op1 || op2); //결과는 true(1)이거나 false(0) 둘중에 하나
-			}
-			else if (strcmp(token, "==") == 0) {
-				temp = (op1 == op2); //결과는 true(1)이거나 false(0) 둘중에 하나
-			}
-			else if (strcmp(token, "!=") == 0) {
-				temp = (op1 != op2); //결과는 true(1)이거나 false(0) 둘중에 하나
-			}
-			else if (*token == '<') {
-				temp = (op1 < op2); //결과는 true(1)이거나 false(0) 둘중에 하나
-			}
-			else if (*token == '>') {
-				temp = (op1 > op2); //결과는 true(1)이거나 false(0) 둘중에 하나
-			}
-			else if (strcmp(token, "<=") == 0) {
-				temp = (op1 <= op2); //결과는 true(1)이거나 false(0) 둘중에 하나
-			}
-			else if (strcmp(token, ">=") == 0) {
-				temp = (op1 >= op2); //결과는 true(1)이거나 false(0) 둘중에 하나
-			}
-
-			Push(s_i, &temp);
 		}
 
 		token = strtok(NULL, " "); //다음 토큰
 	}
 
 	//스택에 남아있는 연산 최종결과를 저장하여 리턴
-	int result = *(int*)Pop(s_i);
+	int result = Pop(s);
 
 	//스택 사용이 끝나면 삭제
-	DestroyStack(&s_i);
+	DestroyStack(&s);
 
 	return result;
 }
